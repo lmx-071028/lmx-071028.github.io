@@ -203,6 +203,35 @@ body {
 
 /* 去除多余的黑线 */
 hr { border: 2px dashed #ff9a9e !important; box-sizing: content-box; height: 0; }
+#page-header {
+  background-color: #FF7B54;
+  background-image: linear-gradient(135deg, #FF7B54 0%, #FFB26B 100%);
+}
+
+/* 2. 增强首页大标题的气势 */
+#site-title {
+  font-size: 3.5rem !important; /* 字体放大 */
+  font-weight: bold;
+  text-shadow: 0 5px 10px rgba(0,0,0,0.2); /* 增加立体阴影 */
+  letter-spacing: 5px; /* 增加字间距 */
+}
+
+/* 3. 美化副标题（打字机部分） */
+#site-subtitle {
+  font-size: 1.5rem !important;
+  background: rgba(255,255,255,0.2); /* 给文字加个淡淡的背景条 */
+  padding: 5px 15px;
+  border-radius: 10px;
+  backdrop-filter: blur(5px);
+  margin-top: 10px;
+  display: inline-block;
+}
+
+/* 4. 下滑箭头动画（提示用户下面还有内容） */
+#scroll-down {
+  display: block;
+  bottom: 20px;
+}
 </style>
 <meta name="generator" content="Hexo 8.0.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
   const $loadingBox = document.getElementById('loading-box')
