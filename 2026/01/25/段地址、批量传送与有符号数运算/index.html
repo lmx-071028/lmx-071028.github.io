@@ -1,0 +1,485 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>段地址、批量传送与有符号数运算 | Welcome to Lmx's blog</title><meta name="author" content="2025lmx"><meta name="copyright" content="2025lmx"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="#ffffff"><meta name="description" content="1. 内存寻址与变址寄存器（索引寻址） 寻址寄存器限制：8086处理器中，只有 BX、SI、DI、BP 可用于提供内存偏移地址。 基址+变址寻址： 合法组合：必须是一个基址寄存器（BX&#x2F;BP）加一个变址寄存器（SI&#x2F;DI）。  [bx+si], [bx+di], [bp+si], [bp+di] (合法)  [bx+ax], [dx+si] (非法)    应用场景：常用于遍历">
+<meta property="og:type" content="article">
+<meta property="og:title" content="段地址、批量传送与有符号数运算">
+<meta property="og:url" content="http://example.com/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/index.html">
+<meta property="og:site_name" content="Welcome to Lmx&#39;s blog">
+<meta property="og:description" content="1. 内存寻址与变址寄存器（索引寻址） 寻址寄存器限制：8086处理器中，只有 BX、SI、DI、BP 可用于提供内存偏移地址。 基址+变址寻址： 合法组合：必须是一个基址寄存器（BX&#x2F;BP）加一个变址寄存器（SI&#x2F;DI）。  [bx+si], [bx+di], [bp+si], [bp+di] (合法)  [bx+ax], [dx+si] (非法)    应用场景：常用于遍历">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="http://example.com/img/c3.png">
+<meta property="article:published_time" content="2026-01-25T09:03:50.000Z">
+<meta property="article:modified_time" content="2026-01-25T09:08:20.603Z">
+<meta property="article:author" content="2025lmx">
+<meta property="article:tag" content="pwn">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="http://example.com/img/c3.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "段地址、批量传送与有符号数运算",
+  "url": "http://example.com/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/",
+  "image": "http://example.com/img/c3.png",
+  "datePublished": "2026-01-25T09:03:50.000Z",
+  "dateModified": "2026-01-25T09:08:20.603Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "2025lmx",
+      "url": "http://example.com"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/img/favicon.png"><link rel="canonical" href="http://example.com/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/css/index.css?v=5.5.1"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@7.1.0/css/all.min.css"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!true && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'undefined')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'undefined')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/',
+  algolia: undefined,
+  localSearch: undefined,
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":true},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: undefined,
+  lightbox: 'null',
+  Snackbar: undefined,
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid@4.12.0/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: false,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: false,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '段地址、批量传送与有符号数运算',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=ZCOOL+KuaiLe&display=swap"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>
+/* 全局字体设置：使用可爱的快乐体 */
+body {
+  font-family: 'ZCOOL KuaiLe', 'Comic Sans MS', sans-serif !important;
+  cursor: url('https://cdn.jsdelivr.net/gh/sviptzk/HexoStaticFile@latest/Hexo/img/default.cur'), auto; /* 可选：可爱的鼠标指针 */
+}
+
+/* 背景图固定与遮罩 */
+#web_bg {
+  background-image: url('https://cdn.jsdelivr.net/gh/sviptzk/HexoStaticFile@latest/Hexo/img/bg.jpg') !important;
+  background-attachment: fixed;
+  background-size: cover;
+}
+/* 给背景加一层淡淡的粉白滤镜，防止字看不清 */
+#web_bg:before {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.3); 
+}
+
+/* 导航栏：半透明奶白色 */
+#page-header.nav-fixed #nav {
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 5px 15px rgba(255, 183, 197, 0.2);
+}
+#nav a { color: #555 !important; text-shadow: none; }
+#site-name { color: #ff9a9e !important; } /* 站名变成粉色 */
+
+/* 文章卡片 & 侧边栏：圆角 + 毛玻璃 + 悬浮特效 */
+.recent-post-item, .card-widget, #page-header, .layout > div:first-child:not(.recent-posts) {
+  background: rgba(255, 255, 255, 0.85) !important; /* 奶白半透明 */
+  border-radius: 20px !important; /* 大圆角 */
+  border: 2px solid #fff;
+  box-shadow: 0 8px 16px rgba(255, 154, 158, 0.2) !important; /* 淡淡的粉色阴影 */
+  transition: all 0.3s ease-in-out;
+}
+
+/* 鼠标悬停卡片：轻轻上浮 */
+.recent-post-item:hover, .card-widget:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 24px rgba(255, 154, 158, 0.4) !important;
+  border-color: #ff9a9e;
+}
+
+/* 首页大标题字体优化 */
+#site-title {
+  color: #555;
+  text-shadow: 2px 2px 0px #fff;
+  font-weight: normal;
+}
+
+/* 滚动条美化：细细的粉色 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #ff9a9e; border-radius: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 去除多余的黑线 */
+hr { border: 2px dashed #ff9a9e !important; box-sizing: content-box; height: 0; }
+#page-header {
+  background-color: #FF7B54;
+  background-image: linear-gradient(135deg, #FF7B54 0%, #FFB26B 100%);
+}
+
+/* 2. 增强首页大标题的气势 */
+#site-title {
+  font-size: 3.5rem !important; /* 字体放大 */
+  font-weight: bold;
+  text-shadow: 0 5px 10px rgba(0,0,0,0.2); /* 增加立体阴影 */
+  letter-spacing: 5px; /* 增加字间距 */
+}
+
+/* 3. 美化副标题（打字机部分） */
+#site-subtitle {
+  font-size: 1.5rem !important;
+  background: rgba(255,255,255,0.2); /* 给文字加个淡淡的背景条 */
+  padding: 5px 15px;
+  border-radius: 10px;
+  backdrop-filter: blur(5px);
+  margin-top: 10px;
+  display: inline-block;
+}
+
+/* 4. 下滑箭头动画（提示用户下面还有内容） */
+#scroll-down {
+  display: block;
+  bottom: 20px;
+}
+</style>
+<meta name="generator" content="Hexo 8.0.0"></head><body><div id="loading-box"><div class="loading-left-bg"></div><div class="loading-right-bg"></div><div class="spinner-box"><div class="configure-border-1"><div class="configure-core"></div></div><div class="configure-border-2"><div class="configure-core"></div></div><div class="loading-word">加载中...</div></div></div><script>(()=>{
+  const $loadingBox = document.getElementById('loading-box')
+  const $body = document.body
+  const preloader = {
+    endLoading: () => {
+      if ($loadingBox.classList.contains('loaded')) return
+      $body.style.overflow = ''
+      $loadingBox.classList.add('loaded')
+    },
+    initLoading: () => {
+      $body.style.overflow = 'hidden'
+      $loadingBox.classList.remove('loaded')
+    }
+  }
+
+  preloader.initLoading()
+
+  if (document.readyState === 'complete') {
+    preloader.endLoading()
+  } else {
+    window.addEventListener('load', preloader.endLoading)
+    document.addEventListener('DOMContentLoaded', preloader.endLoading)
+    // Add timeout protection: force end after 7 seconds
+    setTimeout(preloader.endLoading, 7000)
+  }
+
+  if (true) {
+    btf.addGlobalFn('pjaxSend', preloader.initLoading, 'preloader_init')
+    btf.addGlobalFn('pjaxComplete', preloader.endLoading, 'preloader_end')
+  }
+})()</script><div id="web_bg" style="background: [object Object];"></div><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/img/friend_404.gif" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/archives/"><div class="headline">文章</div><div class="length-num">6</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">5</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-house"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-box-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><span> 列表</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> Music</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> Movie</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg fixed" id="page-header" style="background-image: url(/img/c3.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/"><img class="site-icon" src="/img/a.png" alt="Logo"><span class="site-name">Welcome to Lmx's blog</span></a><a class="nav-page-title" href="/"><span class="site-name">段地址、批量传送与有符号数运算</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div class="menus_items"><div class="menus_item"><a class="site-page" href="/"><i class="fa-fw fas fa-house"></i><span> 首页</span></a></div><div class="menus_item"><a class="site-page" href="/archives/"><i class="fa-fw fas fa-box-archive"></i><span> 归档</span></a></div><div class="menus_item"><a class="site-page" href="/about/"><i class="fa-fw fas fa-heart"></i><span> 关于</span></a></div><div class="menus_item"><a class="site-page" href="/categories/"><i class="fa-fw fas fa-folder-open"></i><span> 分类</span></a></div><div class="menus_item"><span class="site-page group"><span> 列表</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/music/"><i class="fa-fw fas fa-music"></i><span> Music</span></a></li><li><a class="site-page child" href="/movies/"><i class="fa-fw fas fa-video"></i><span> Movie</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/link/"><i class="fa-fw fas fa-link"></i><span> 友链</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">段地址、批量传送与有符号数运算</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2026-01-25T09:03:50.000Z" title="发表于 2026-01-25 17:03:50">2026-01-25</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2026-01-25T09:08:20.603Z" title="更新于 2026-01-25 17:08:20">2026-01-25</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/pwn/">pwn</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/categories/pwn/%E6%B1%87%E7%BC%96/">汇编</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="1-内存寻址与变址寄存器（索引寻址）"><a href="#1-内存寻址与变址寄存器（索引寻址）" class="headerlink" title="1. 内存寻址与变址寄存器（索引寻址）"></a>1. 内存寻址与变址寄存器（索引寻址）</h2><ul>
+<li><strong>寻址寄存器限制</strong>：8086处理器中，只有 <code>BX</code>、<code>SI</code>、<code>DI</code>、<code>BP</code> 可用于提供内存偏移地址。</li>
+<li><strong>基址+变址寻址</strong>：<ul>
+<li><p><strong>合法组合</strong>：必须是一个基址寄存器（BX&#x2F;BP）加一个变址寄存器（SI&#x2F;DI）。</p>
+<ul>
+<li><p><code>[bx+si]</code>, <code>[bx+di]</code>, <code>[bp+si]</code>, <code>[bp+di]</code> (合法)</p>
+</li>
+<li><p><code>[bx+ax]</code>, <code>[dx+si]</code> (非法)</p>
+</li>
+</ul>
+</li>
+<li><p><strong>应用场景</strong>：常用于遍历数组或多位数值。例如 <code>mov al, [bx+si]</code>，其中 BX 指向起始地址，SI 作为索引递增&#x2F;递减。</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="2-算术指令的逻辑"><a href="#2-算术指令的逻辑" class="headerlink" title="2. 算术指令的逻辑"></a>2. 算术指令的逻辑</h2><ul>
+<li><p><strong>减法指令 <code>sub</code></strong>：处理器内部通常没有独立的减法电路，<code>sub ah, al</code> 实际上等同于 <code>neg al</code> (求补码) 然后 <code>add ah, al</code>。</p>
+</li>
+<li><p><strong>除法指令：div 与 idiv</strong>：</p>
+<ul>
+<li><code>div</code>：无符号数除法（Unsigned Divide）。</li>
+<li><code>idiv</code>：有符号数除法（Signed Divide）。</li>
+</ul>
+</li>
+<li><p><strong>重要前置操作 <code>cwd</code></strong>：在执行 16 位有符号除法前，必须用 <code>cwd</code> 指令将 <code>AX</code> 的符号扩展到 <code>DX</code>，形成 <code>DX:AX</code>。如果不执行这一步，高位 <code>DX</code> 的随机值会导致除法溢出或结果错误。</p>
+</li>
+</ul>
+<h2 id="3-核心标志位详解"><a href="#3-核心标志位详解" class="headerlink" title="3. 核心标志位详解"></a>3. 核心标志位详解</h2><p>处理器执行指令时不区分有符号或无符号，它只是更新标志位，由程序员决定看哪个标志：</p>
+<table>
+<thead>
+<tr>
+<th>标志位</th>
+<th>全称</th>
+<th>判定逻辑</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CF</strong></td>
+<td>Carry Flag</td>
+<td>最高位是否有进位或借位</td>
+<td><strong>无符号数</strong>溢出</td>
+</tr>
+<tr>
+<td><strong>OF</strong></td>
+<td>Overflow Flag</td>
+<td>结果是否超出了有符号数能表示的范围</td>
+<td><strong>有符号数</strong>溢出</td>
+</tr>
+<tr>
+<td><strong>ZF</strong></td>
+<td>Zero Flag</td>
+<td>结果是否为 0</td>
+<td>循环控制、相等判断</td>
+</tr>
+<tr>
+<td><strong>SF</strong></td>
+<td>Sign Flag</td>
+<td>结果的最高位是否为 1（即结果是否为负）</td>
+<td>有符号正负判断</td>
+</tr>
+<tr>
+<td><strong>PF</strong></td>
+<td>Parity Flag</td>
+<td>结果最低 8 位中“1”的个数是否为偶数</td>
+<td>通信奇偶校验</td>
+</tr>
+</tbody></table>
+<ul>
+<li><strong>特殊规则</strong>：<code>inc</code> 和 <code>dec</code> 指令<strong>不影响 CF</strong>（进位标志），但会影响 ZF、SF、OF。</li>
+</ul>
+<h2 id="4-比较与条件转移指令（jcc）"><a href="#4-比较与条件转移指令（jcc）" class="headerlink" title="4. 比较与条件转移指令（jcc）"></a>4. 比较与条件转移指令（jcc）</h2><ul>
+<li><strong><code>cmp</code> 指令</strong>：执行减法操作，但<strong>不保存结果</strong>，仅更新标志位。</li>
+<li><strong>条件跳转（依赖标志位状态）</strong>：</li>
+</ul>
+<h3 id="常用跳转指令表"><a href="#常用跳转指令表" class="headerlink" title="常用跳转指令表"></a>常用跳转指令表</h3><table>
+<thead>
+<tr>
+<th>指令</th>
+<th>英文含义</th>
+<th>跳转条件</th>
+<th>解释</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>jz &#x2F; je</strong></td>
+<td>Jump Zero &#x2F; Equal</td>
+<td>ZF&#x3D;1</td>
+<td>结果为0或相等</td>
+</tr>
+<tr>
+<td><strong>jnz &#x2F; jne</strong></td>
+<td>Jump Not Zero</td>
+<td>ZF&#x3D;0</td>
+<td>结果不为0或不等</td>
+</tr>
+<tr>
+<td><strong>js &#x2F; jns</strong></td>
+<td>Jump Sign &#x2F; Not Sign</td>
+<td>SF&#x3D;1 &#x2F; SF&#x3D;0</td>
+<td>结果为负 &#x2F; 结果为正</td>
+</tr>
+<tr>
+<td><strong>jo &#x2F; jno</strong></td>
+<td>Jump Overflow</td>
+<td>OF&#x3D;1 &#x2F; OF&#x3D;0</td>
+<td>有符号溢出 &#x2F; 未溢出</td>
+</tr>
+<tr>
+<td><strong>jc &#x2F; jnc</strong></td>
+<td>Jump Carry</td>
+<td>CF&#x3D;1 &#x2F; CF&#x3D;0</td>
+<td>无符号溢出(借位) &#x2F; 未溢出</td>
+</tr>
+</tbody></table>
+<h3 id="比较跳转（专门区分有-无符号）"><a href="#比较跳转（专门区分有-无符号）" class="headerlink" title="比较跳转（专门区分有&#x2F;无符号）"></a>比较跳转（专门区分有&#x2F;无符号）</h3><ul>
+<li><strong>无符号数（Above&#x2F;Below）</strong>：<code>ja</code> (高于), <code>jae</code> (高于等于), <code>jb</code> (低于), <code>jbe</code> (低于等于)。</li>
+<li><strong>有符号数（Greater&#x2F;Less）</strong>：<code>jg</code> (大于), <code>jge</code> (大于等于), <code>jl</code> (小于), <code>jle</code> (小于等于)。</li>
+</ul>
+<h2 id="5-NASM-编译器特殊符号"><a href="#5-NASM-编译器特殊符号" class="headerlink" title="5. NASM 编译器特殊符号"></a>5. NASM 编译器特殊符号</h2><ul>
+<li><strong><code>$</code></strong>：表示当前行在当前段内的<strong>汇编地址</strong>。</li>
+<li><strong><code>$$</code></strong>：表示当前段的<strong>起始汇编地址</strong>。</li>
+<li><strong><code>jmp near $</code></strong>：死循环。因为 <code>$</code> 代表当前指令地址，所以它会无限跳转回自己。</li>
+<li><strong>程序填充逻辑</strong>：<code>times 510-($-$$) db 0</code> 用于计算当前代码到 510 字节处的距离并填充 0，常用于制作 MBR（512字节）。</li>
+</ul>
+<h2 id="6-数据显示与-ASCII-转换"><a href="#6-数据显示与-ASCII-转换" class="headerlink" title="6. 数据显示与 ASCII 转换"></a>6. 数据显示与 ASCII 转换</h2><ul>
+<li><strong>数值转 ASCII</strong>：计算出的单个数字（0-9）必须<strong>加上 0x30</strong>（即字符 ‘0’ 的编码）才能在屏幕上正确显示。</li>
+<li><strong>低端字节序</strong>：在 16 位传送（如 <code>movsw</code>）到显存时，低字节存入偏移地址处（字符），高字节存入偏移地址+1处（属性）。</li>
+</ul>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="http://example.com">2025lmx</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="http://example.com/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/">http://example.com/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="http://example.com" target="_blank">Welcome to Lmx's blog</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/tags/pwn/">pwn</a></div><div class="post-share"><div class="social-share" data-image="/img/c3.png" data-sites="facebook,x,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/2026/01/25/%E6%A0%88%E6%9C%BA%E5%88%B6%E3%80%81%E9%80%BB%E8%BE%91%E8%BF%90%E7%AE%97%E3%80%81%E6%95%B0%E5%80%BC%E5%A4%84%E7%90%86/" title="栈机制、逻辑运算、数值处理"><img class="cover" src="/img/c2.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">栈机制、逻辑运算、数值处理</div></div><div class="info-2"><div class="info-item-1">1. 逻辑运算指令这些指令直接对操作数的位 (bit) 进行运算，是汇编编程的基础工具。  OR (逻辑或)： 规则：只要有一个为 1，结果即为 1；全 0 则为 0。 应用：常用于将特定位置 1。 技巧：在数字转 ASCII 码时，常用 or dl, 0x30 代替加法（前提是 DL 高 4 位为 0）。   AND (逻辑与)： 规则：两个都为 1，结果才为 1。 应用：用于位屏蔽 (Masking)，即将特定位清零而保留其他位。   XOR (逻辑异或)： 规则：相同为 0，不同为 1。 应用：寄存器快速清零。xor ax, ax 比 mov ax, 0 指令更短、执行更快。   标志位影响：这些指令执行后，OF 和 CF 强制清零，SF、ZF、PF 根据结果设置，AF 状态未定义  2. 栈栈是处理器自动维护的一种“后进先出 (LIFO)”的数据结构。  核心寄存器： SS (Stack Segment)：存放栈段的段地址。 SP (Stack Pointer)：存放栈顶的偏移地址。   推进方向：向下增长。即从高地址向低地址推进。 操作原理： PUSH (压栈)：SP ...</div></div></div></a><a class="pagination-related" href="/2026/01/23/pwn%E5%AD%A6%E4%B9%A0%E6%A2%B3%E7%90%86/" title="pwn学习梳理"><img class="cover" src="/img/c4.png" onerror="onerror=null;src='/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">pwn学习梳理</div></div><div class="info-2"><div class="info-item-1"> 本博客梳理了我学 pwn 以来的内容stackret2text介绍在这种方法中，一般会存在已存在的后门函数，例如 system(“&#x2F;bin&#x2F;sh”)，或者拥有 system 函数，和程序中拥有的字符串 &#x2F;bin&#x2F;sh 利用方法 计算偏移，覆盖至返回地址 跳转至目标函数  ret2shellcode介绍如果没有后门函数，我们可以考虑利用 ret2shellcode利用条件：  NX 关闭 存在溢出漏洞 有足够的空间大小能容纳 shellcode，包括 栈上缓冲区 （关闭NX 一般权限是 RWX） 或泄漏的地址 （需要此处权限是 RWX，例如泄露的 bss 段地址）    编写 shellcode 方法 自动生成  123456from pwn import *context(os=&#x27;linux&#x27;, arch=&#x27;amd64&#x27;) # 指定架构# 直接生成最常用的执行 /bin/sh 的代码shellcode = asm(shellcraft.sh())  汇编，hex  12345678910111213...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/2026/01/23/pwn%E5%AD%A6%E4%B9%A0%E6%A2%B3%E7%90%86/" title="pwn学习梳理"><img class="cover" src="/img/c4.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-23</div><div class="info-item-2">pwn学习梳理</div></div><div class="info-2"><div class="info-item-1"> 本博客梳理了我学 pwn 以来的内容stackret2text介绍在这种方法中，一般会存在已存在的后门函数，例如 system(“&#x2F;bin&#x2F;sh”)，或者拥有 system 函数，和程序中拥有的字符串 &#x2F;bin&#x2F;sh 利用方法 计算偏移，覆盖至返回地址 跳转至目标函数  ret2shellcode介绍如果没有后门函数，我们可以考虑利用 ret2shellcode利用条件：  NX 关闭 存在溢出漏洞 有足够的空间大小能容纳 shellcode，包括 栈上缓冲区 （关闭NX 一般权限是 RWX） 或泄漏的地址 （需要此处权限是 RWX，例如泄露的 bss 段地址）    编写 shellcode 方法 自动生成  123456from pwn import *context(os=&#x27;linux&#x27;, arch=&#x27;amd64&#x27;) # 指定架构# 直接生成最常用的执行 /bin/sh 的代码shellcode = asm(shellcraft.sh())  汇编，hex  12345678910111213...</div></div></div></a><a class="pagination-related" href="/2025/10/28/%E5%AF%B9%E4%BA%8E%E7%AC%AC%E4%B8%80%E6%AC%A1pwn%E7%9A%84%E5%87%BA%E9%A2%98%E5%B0%8F%E8%AE%B0/" title="对于第一次pwn的出题小记"><img class="cover" src="/img/c1.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-10-28</div><div class="info-item-2">对于第一次pwn的出题小记</div></div><div class="info-2"><div class="info-item-1">前言：本篇文章将讲述出题的全过程，从编写题目，到环境搭建以及搭建过程中我遇到的一些问题，现在让我们开始吧。出题编写题目首先，让我们打开虚拟机，来进行源代码的编写，编写完的题目奉上： 123456789101112131415161718192021#include &lt;stdio.h&gt;#include &lt;stdlib.h&gt; #include &lt;unistd.h&gt;  void backdoor()&#123;    system(&quot;/bin/sh&quot;);&#125;void vulnerable_function() &#123;    char buf[0x10];    read(0,buf,0x100);&#125;int main() &#123;    printf(&quot;Welcome to pwn world!\n&quot;);    printf(&quot;try to resolve pwn&#x27;s hello world,the most easy ret2text challenge!\n&q...</div></div></div></a><a class="pagination-related" href="/2026/01/25/%E6%A0%88%E6%9C%BA%E5%88%B6%E3%80%81%E9%80%BB%E8%BE%91%E8%BF%90%E7%AE%97%E3%80%81%E6%95%B0%E5%80%BC%E5%A4%84%E7%90%86/" title="栈机制、逻辑运算、数值处理"><img class="cover" src="/img/c2.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2026-01-25</div><div class="info-item-2">栈机制、逻辑运算、数值处理</div></div><div class="info-2"><div class="info-item-1">1. 逻辑运算指令这些指令直接对操作数的位 (bit) 进行运算，是汇编编程的基础工具。  OR (逻辑或)： 规则：只要有一个为 1，结果即为 1；全 0 则为 0。 应用：常用于将特定位置 1。 技巧：在数字转 ASCII 码时，常用 or dl, 0x30 代替加法（前提是 DL 高 4 位为 0）。   AND (逻辑与)： 规则：两个都为 1，结果才为 1。 应用：用于位屏蔽 (Masking)，即将特定位清零而保留其他位。   XOR (逻辑异或)： 规则：相同为 0，不同为 1。 应用：寄存器快速清零。xor ax, ax 比 mov ax, 0 指令更短、执行更快。   标志位影响：这些指令执行后，OF 和 CF 强制清零，SF、ZF、PF 根据结果设置，AF 状态未定义  2. 栈栈是处理器自动维护的一种“后进先出 (LIFO)”的数据结构。  核心寄存器： SS (Stack Segment)：存放栈段的段地址。 SP (Stack Pointer)：存放栈顶的偏移地址。   推进方向：向下增长。即从高地址向低地址推进。 操作原理： PUSH (压栈)：SP ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/img/friend_404.gif" onerror="this.onerror=null;this.src='/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">2025lmx</div><div class="author-info-description">Binary | CTF Player | Pwn | Cybersecurity</div><div class="site-data"><a href="/archives/"><div class="headline">文章</div><div class="length-num">6</div></a><a href="/tags/"><div class="headline">标签</div><div class="length-num">5</div></a><a href="/categories/"><div class="headline">分类</div><div class="length-num">7</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/lmx-071028"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/lmx-071028" target="_blank" title="Github"><i class="fab fa-github" style="color: #24292e;"></i></a><a class="social-icon" href="mailto:3405626113@qq.com" target="_blank" title="Email"><i class="fas fa-envelope" style="color: #4a7dbe;"></i></a><a class="social-icon" href="https://space.bilibili.com/545081515" target="_blank" title="Bilibili"><i class="fab fa-bilibili" style="color: #00aeec;"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content"><marquee scrollamount="5" onmouseover="this.stop()" onmouseout="this.start()">📢 欢迎来到 lmx 的温馨小屋！这里有技术，也有生活~ 记得常来玩哦 (｡･∀･)ﾉﾞ</marquee></div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E5%86%85%E5%AD%98%E5%AF%BB%E5%9D%80%E4%B8%8E%E5%8F%98%E5%9D%80%E5%AF%84%E5%AD%98%E5%99%A8%EF%BC%88%E7%B4%A2%E5%BC%95%E5%AF%BB%E5%9D%80%EF%BC%89"><span class="toc-number">1.</span> <span class="toc-text">1. 内存寻址与变址寄存器（索引寻址）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E7%AE%97%E6%9C%AF%E6%8C%87%E4%BB%A4%E7%9A%84%E9%80%BB%E8%BE%91"><span class="toc-number">2.</span> <span class="toc-text">2. 算术指令的逻辑</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E6%A0%B8%E5%BF%83%E6%A0%87%E5%BF%97%E4%BD%8D%E8%AF%A6%E8%A7%A3"><span class="toc-number">3.</span> <span class="toc-text">3. 核心标志位详解</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E6%AF%94%E8%BE%83%E4%B8%8E%E6%9D%A1%E4%BB%B6%E8%BD%AC%E7%A7%BB%E6%8C%87%E4%BB%A4%EF%BC%88jcc%EF%BC%89"><span class="toc-number">4.</span> <span class="toc-text">4. 比较与条件转移指令（jcc）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%B8%B8%E7%94%A8%E8%B7%B3%E8%BD%AC%E6%8C%87%E4%BB%A4%E8%A1%A8"><span class="toc-number">4.1.</span> <span class="toc-text">常用跳转指令表</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%AF%94%E8%BE%83%E8%B7%B3%E8%BD%AC%EF%BC%88%E4%B8%93%E9%97%A8%E5%8C%BA%E5%88%86%E6%9C%89-%E6%97%A0%E7%AC%A6%E5%8F%B7%EF%BC%89"><span class="toc-number">4.2.</span> <span class="toc-text">比较跳转（专门区分有&#x2F;无符号）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-NASM-%E7%BC%96%E8%AF%91%E5%99%A8%E7%89%B9%E6%AE%8A%E7%AC%A6%E5%8F%B7"><span class="toc-number">5.</span> <span class="toc-text">5. NASM 编译器特殊符号</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%95%B0%E6%8D%AE%E6%98%BE%E7%A4%BA%E4%B8%8E-ASCII-%E8%BD%AC%E6%8D%A2"><span class="toc-number">6.</span> <span class="toc-text">6. 数据显示与 ASCII 转换</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/2026/01/25/%E6%A0%88%E6%9C%BA%E5%88%B6%E3%80%81%E9%80%BB%E8%BE%91%E8%BF%90%E7%AE%97%E3%80%81%E6%95%B0%E5%80%BC%E5%A4%84%E7%90%86/" title="栈机制、逻辑运算、数值处理"><img src="/img/c2.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="栈机制、逻辑运算、数值处理"/></a><div class="content"><a class="title" href="/2026/01/25/%E6%A0%88%E6%9C%BA%E5%88%B6%E3%80%81%E9%80%BB%E8%BE%91%E8%BF%90%E7%AE%97%E3%80%81%E6%95%B0%E5%80%BC%E5%A4%84%E7%90%86/" title="栈机制、逻辑运算、数值处理">栈机制、逻辑运算、数值处理</a><time datetime="2026-01-25T09:16:32.000Z" title="发表于 2026-01-25 17:16:32">2026-01-25</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/" title="段地址、批量传送与有符号数运算"><img src="/img/c3.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="段地址、批量传送与有符号数运算"/></a><div class="content"><a class="title" href="/2026/01/25/%E6%AE%B5%E5%9C%B0%E5%9D%80%E3%80%81%E6%89%B9%E9%87%8F%E4%BC%A0%E9%80%81%E4%B8%8E%E6%9C%89%E7%AC%A6%E5%8F%B7%E6%95%B0%E8%BF%90%E7%AE%97/" title="段地址、批量传送与有符号数运算">段地址、批量传送与有符号数运算</a><time datetime="2026-01-25T09:03:50.000Z" title="发表于 2026-01-25 17:03:50">2026-01-25</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2026/01/23/pwn%E5%AD%A6%E4%B9%A0%E6%A2%B3%E7%90%86/" title="pwn学习梳理"><img src="/img/c4.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="pwn学习梳理"/></a><div class="content"><a class="title" href="/2026/01/23/pwn%E5%AD%A6%E4%B9%A0%E6%A2%B3%E7%90%86/" title="pwn学习梳理">pwn学习梳理</a><time datetime="2026-01-22T16:00:00.000Z" title="发表于 2026-01-23 00:00:00">2026-01-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2025/10/28/%E5%AF%B9%E4%BA%8E%E7%AC%AC%E4%B8%80%E6%AC%A1pwn%E7%9A%84%E5%87%BA%E9%A2%98%E5%B0%8F%E8%AE%B0/" title="对于第一次pwn的出题小记"><img src="/img/c1.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="对于第一次pwn的出题小记"/></a><div class="content"><a class="title" href="/2025/10/28/%E5%AF%B9%E4%BA%8E%E7%AC%AC%E4%B8%80%E6%AC%A1pwn%E7%9A%84%E5%87%BA%E9%A2%98%E5%B0%8F%E8%AE%B0/" title="对于第一次pwn的出题小记">对于第一次pwn的出题小记</a><time datetime="2025-10-28T04:41:11.000Z" title="发表于 2025-10-28 12:41:11">2025-10-28</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/2025/10/26/%E5%9F%BA%E4%BA%8Ehexo%E6%A1%86%E6%9E%B6%E7%9A%84%EF%BC%8C%E5%92%8Cbutterfly%E6%B8%B2%E6%9F%93%E7%9A%84%E7%BD%91%E9%A1%B5%E6%90%AD%E5%BB%BA%E6%95%99%E7%A8%8B%EF%BC%88%E4%BA%8C%EF%BC%89/" title="基于hexo框架的，和butterfly渲染的网页搭建教程（二）"><img src="/img/c2.png" onerror="this.onerror=null;this.src='/img/404.jpg'" alt="基于hexo框架的，和butterfly渲染的网页搭建教程（二）"/></a><div class="content"><a class="title" href="/2025/10/26/%E5%9F%BA%E4%BA%8Ehexo%E6%A1%86%E6%9E%B6%E7%9A%84%EF%BC%8C%E5%92%8Cbutterfly%E6%B8%B2%E6%9F%93%E7%9A%84%E7%BD%91%E9%A1%B5%E6%90%AD%E5%BB%BA%E6%95%99%E7%A8%8B%EF%BC%88%E4%BA%8C%EF%BC%89/" title="基于hexo框架的，和butterfly渲染的网页搭建教程（二）">基于hexo框架的，和butterfly渲染的网页搭建教程（二）</a><time datetime="2025-10-26T12:24:42.000Z" title="发表于 2025-10-26 20:24:42">2025-10-26</time></div></div></div></div></div></div></main><footer id="footer" style="background-image: url(/img/c3.png);"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 - 2026 By 2025lmx</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 8.0.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.5.1</a></span></div><div class="footer_custom_text">binary不撒谎，眼睛也一样</div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/js/utils.js?v=5.5.1"></script><script src="/js/main.js?v=5.5.1"></script><div class="js-pjax"></div><script src="https://cdn.jsdelivr.net/gh/wallleap/cdn/js/sakura.js"></script><script src="https://fastly.jsdelivr.net/gh/stevenjoezhang/live2d-widget@latest/autoload.js"></script><canvas class="fireworks" mobile="true"></canvas><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/dist/fireworks.min.js"></script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/aplayer@1.10.1/dist/APlayer.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc@1.1.6/metingjs/dist/Meting.min.js"></script><script>(() => {
+  const destroyAplayer = () => {
+    if (window.aplayers) {
+      for (let i = 0; i < window.aplayers.length; i++) {
+        if (!window.aplayers[i].options.fixed) {
+          window.aplayers[i].destroy()
+        }
+      }
+    }
+  }
+
+  const runMetingJS = () => {
+    typeof loadMeting === 'function' && document.getElementsByClassName('aplayer').length && loadMeting()
+  }
+
+  btf.addGlobalFn('pjaxSend', destroyAplayer, 'destroyAplayer')
+  btf.addGlobalFn('pjaxComplete', loadMeting, 'runMetingJS')
+})()</script><script src="https://cdn.jsdelivr.net/npm/pjax@0.2.8/pjax.min.js"></script><script>(() => {
+  const pjaxSelectors = ["head > title","#config-diff","#body-wrap","#rightside-config-hide","#rightside-config-show",".js-pjax"]
+
+  window.pjax = new Pjax({
+    elements: 'a:not([target="_blank"])',
+    selectors: pjaxSelectors,
+    cacheBust: false,
+    analytics: false,
+    scrollRestoration: false
+  })
+
+  const triggerPjaxFn = (val) => {
+    if (!val) return
+    Object.values(val).forEach(fn => {
+      try {
+        fn()
+      } catch (err) {
+        console.debug('Pjax callback failed:', err)
+      }
+    })
+  }
+
+  document.addEventListener('pjax:send', () => {
+    // removeEventListener
+    btf.removeGlobalFnEvent('pjaxSendOnce')
+    btf.removeGlobalFnEvent('themeChange')
+
+    // reset readmode
+    const $bodyClassList = document.body.classList
+    if ($bodyClassList.contains('read-mode')) $bodyClassList.remove('read-mode')
+
+    triggerPjaxFn(window.globalFn.pjaxSend)
+  })
+
+  document.addEventListener('pjax:complete', () => {
+    btf.removeGlobalFnEvent('pjaxCompleteOnce')
+    document.querySelectorAll('script[data-pjax]').forEach(item => {
+      const newScript = document.createElement('script')
+      const content = item.text || item.textContent || item.innerHTML || ""
+      Array.from(item.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value))
+      newScript.appendChild(document.createTextNode(content))
+      item.parentNode.replaceChild(newScript, item)
+    })
+
+    triggerPjaxFn(window.globalFn.pjaxComplete)
+  })
+
+  document.addEventListener('pjax:error', e => {
+    if (e.request.status === 404) {
+      const usePjax = true
+      true
+        ? (usePjax ? pjax.loadUrl('/404.html') : window.location.href = '/404.html')
+        : window.location.href = e.request.responseURL
+    }
+  })
+})()</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div></body></html>
