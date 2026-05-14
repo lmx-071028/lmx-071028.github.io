@@ -3,6 +3,7 @@
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const canTrail = finePointer && !reduceMotion;
   let lastTrailAt = 0;
+  let lastBloomAt = 0;
 
   function setAuroraFocus(event) {
     document.documentElement.style.setProperty("--aurora-x", `${event.clientX}px`);
@@ -13,27 +14,31 @@
     if (!canTrail || !document.body) return;
 
     const now = performance.now();
-    if (now - lastTrailAt < 26) return;
+    if (now - lastTrailAt < 34) return;
     lastTrailAt = now;
 
     const trail = document.createElement("span");
     trail.className = "aurora-cursor-trail";
     trail.style.left = `${event.clientX}px`;
     trail.style.top = `${event.clientY}px`;
-    trail.style.setProperty("--trail-hue", String(205 + Math.round((event.clientX / Math.max(window.innerWidth, 1)) * 96)));
     document.body.appendChild(trail);
-    window.setTimeout(() => trail.remove(), 760);
+    window.setTimeout(() => trail.remove(), 660);
   }
 
   function addBloom(event) {
     if (!canTrail || !document.body) return;
+    if (event.button !== 0) return;
+
+    const now = performance.now();
+    if (now - lastBloomAt < 180) return;
+    lastBloomAt = now;
 
     const bloom = document.createElement("span");
     bloom.className = "aurora-cursor-bloom";
     bloom.style.left = `${event.clientX}px`;
     bloom.style.top = `${event.clientY}px`;
     document.body.appendChild(bloom);
-    window.setTimeout(() => bloom.remove(), 820);
+    window.setTimeout(() => bloom.remove(), 720);
   }
 
   window.addEventListener("pointermove", function (event) {
