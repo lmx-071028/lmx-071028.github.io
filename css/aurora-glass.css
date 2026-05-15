@@ -575,20 +575,21 @@ hr {
 }
 
 .aurora-cursor-trail {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   background:
-    radial-gradient(circle, rgba(246, 240, 223, 0.64) 0 8%, rgba(95, 184, 170, 0.26) 24%, rgba(214, 168, 93, 0.10) 48%, transparent 72%);
-  filter: blur(1px);
+    radial-gradient(circle, rgba(246, 240, 223, 0.88) 0 9%, rgba(95, 184, 170, 0.44) 28%, rgba(214, 168, 93, 0.22) 52%, transparent 76%);
+  box-shadow: 0 0 16px rgba(95, 184, 170, 0.28), 0 0 22px rgba(214, 168, 93, 0.16);
+  filter: blur(0.6px);
   animation: aurora-trail 620ms ease-out forwards;
 }
 
 .aurora-cursor-bloom {
   width: 54px;
   height: 54px;
-  border: 1px solid rgba(246, 240, 223, 0.26);
-  background: radial-gradient(circle, rgba(246, 240, 223, 0.22), rgba(95, 184, 170, 0.13) 38%, rgba(214, 168, 93, 0.06) 58%, transparent 74%);
-  box-shadow: 0 0 22px rgba(95, 184, 170, 0.14);
+  border: 1px solid rgba(246, 240, 223, 0.42);
+  background: radial-gradient(circle, rgba(246, 240, 223, 0.34), rgba(95, 184, 170, 0.24) 38%, rgba(214, 168, 93, 0.14) 58%, transparent 76%);
+  box-shadow: 0 0 28px rgba(95, 184, 170, 0.24), 0 0 42px rgba(214, 168, 93, 0.12);
   filter: blur(0.4px);
   animation: aurora-bloom 680ms ease-out forwards;
 }
@@ -618,12 +619,12 @@ hr {
 }
 
 @keyframes aurora-trail {
-  0% { opacity: 0.48; transform: translate(-50%, -50%) scale(0.52); }
+  0% { opacity: 0.78; transform: translate(-50%, -50%) scale(0.52); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.55); }
 }
 
 @keyframes aurora-bloom {
-  0% { opacity: 0.42; transform: translate(-50%, -50%) scale(0.40); }
+  0% { opacity: 0.64; transform: translate(-50%, -50%) scale(0.40); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.28); }
 }
 
