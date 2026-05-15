@@ -47,4 +47,24 @@
   }, { passive: true });
 
   window.addEventListener("pointerdown", addBloom, { passive: true });
+
+  let activeTitle = document.title;
+  const awayTitle = "快回来喵 (つд⊂)";
+
+  function rememberTitle() {
+    if (!document.hidden) activeTitle = document.title;
+  }
+
+  function updateVisibilityTitle() {
+    if (document.hidden) {
+      activeTitle = document.title;
+      document.title = awayTitle;
+      return;
+    }
+
+    document.title = activeTitle;
+  }
+
+  document.addEventListener("visibilitychange", updateVisibilityTitle);
+  document.addEventListener("pjax:complete", rememberTitle);
 })();
